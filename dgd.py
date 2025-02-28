@@ -15,7 +15,7 @@ device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 print(f"Using device: {device}")
 
 num_agents = 10
-epochs = 1000
+epochs = 100
 learning_rate = 0.01  # Basic learning rate for gradient descent
 batch_size = 64
 connectivity = 0.5
@@ -197,14 +197,9 @@ def run_decentralized_learning(epochs, num_agents, dataloaders, val_loader, devi
                     aggregated_param = torch.zeros_like(param.data)
                     
                     for j in range(num_agents):
-                        # Skip models with NaN parameters
-                        if torch.isnan(param_dict[j][name]).any():
-                            continue
-                        aggregated_param += W[i, j] * param_dict[j][name]
-                    
-                    # Check for NaN before updating
-                    if not torch.isnan(aggregated_param).any():
-                        param.data.copy_(aggregated_param)
+                       aggregated_param += W[i, j] * param_dict[j][name]
+
+                    param.data.copy_(aggregated_param)
         
         # Evaluate and log (every 10 epochs)
         if epoch % 10 == 0 or epoch == epochs - 1:
