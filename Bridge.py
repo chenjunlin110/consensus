@@ -113,6 +113,7 @@ def trimmed_mean_screen(params_list, trim_param):
     return aggregated_params
 
 all_epoch_losses = [[] for _ in range(num_nodes)]
+all_epoch_accuracies = [[] for _ in range(num_nodes)]
 
 # --- 训练循环 ---
 for epoch in range(num_epochs):
@@ -177,7 +178,6 @@ for epoch in range(num_epochs):
 
     # --- 每 10 个 epoch 进行一次评估 ---
     if (epoch + 1) % 10 == 0:
-        all_accuracies = []
         for node_idx in range(num_nodes):
             if node_idx not in byzantine_indices:
                 correct = 0
@@ -190,11 +190,10 @@ for epoch in range(num_epochs):
                         total += target.size(0)
                         correct += (predicted == target).sum().item()
                 accuracy = 100 * correct / total
-                all_accuracies.append(accuracy)
+                all_epoch_accuracies.append(accuracy)
                 print(f"  Evaluation (Epoch {epoch+1}): Node {node_idx} Accuracy = {accuracy:.2f}%")
 
-        if all_accuracies:
-            print(f"  Average Accuracy (non-Byzantine nodes): {np.mean(all_accuracies):.2f}%")
+
 
 print('Finished Training. Evaluating...')
 accuracies = []
@@ -215,47 +214,39 @@ for node_idx in range(num_nodes):
     else:
         accuracies.append(0)  # Placeholder for Byzantine nodes
 
-# --- 绘图 ---
-plt.figure(figsize=(12, 8))
+plt.figure(figsize=(12, 6))
 
-# 1. 绘制每个节点的准确率
-plt.subplot(2, 2, 1)  # 2x2 网格，第 1 个子图
-plt.bar(range(num_nodes), accuracies, color=['blue' if i not in byzantine_indices else 'red' for i in range(num_nodes)])
-plt.xlabel("Node Index")
-plt.ylabel("Accuracy (%)")
-plt.title("Accuracy of Each Node")
-plt.ylim(0, 100)
+# 1. 绘制每个节点的准确率曲线
+plt.subplot(1, 2, 1)  # 1x2 网格，第 1 个子图
+for node_idx in range(num_nodes):
+    if node_idx not in byzantine_indices:
+        plt.plot(range(10, num_epochs + 1, 10), all_epoch_accuracies[node_idx], label=f"Node {node_idx}")
+# 标记拜占庭节点
 for i in byzantine_indices:
-    plt.text(i, accuracies[i] + 2, "Byzantine", ha='center', color='red')
-
-# 2. 绘制每个节点的损失曲线
-plt.subplot(2, 2, 2)  # 2x2 网格，第 2 个子图
-for node_idx in range(num_nodes):
-    if node_idx not in byzantine_indices:
-        plt.plot(all_epoch_losses[node_idx], label=f"Node {node_idx}")
+    plt.axvline(x=0, color='r', linestyle='--', linewidth=0.8)  # 垂直线
+    plt.text(0, 10 * i, "Byz", ha='left', color='red', rotation=90)  # 文本
 plt.xlabel("Epoch")
-plt.ylabel("Average Loss")
-plt.title("Loss Curves (Non-Byzantine Nodes)")
+plt.ylabel("Accuracy (%)")
+plt.title("Accuracy Curves (Non-Byzantine Nodes)")
 plt.legend()
 
-# 3. 绘制每个节点的损失曲线，纵轴采用对数刻度
-plt.subplot(2, 2, 3)  # 2x2 网格，第 3 个子图
+# 2. 绘制每个节点的对数损失曲线
+plt.subplot(1, 2, 2)
 for node_idx in range(num_nodes):
     if node_idx not in byzantine_indices:
-        plt.plot(all_epoch_losses[node_idx], label=f"Node {node_idx}")
+        log_loss = np.log1p(all_epoch_losses[node_idx])
+        plt.plot(log_loss, label=f"Node {node_idx}")
+
+# 标记拜占庭节点
+for i in byzantine_indices:
+    plt.axvline(x=0, color='r', linestyle='--', linewidth=0.8)
+    plt.text(0, 0.1*i , "Byz", ha='left', color='red',rotation=90)
+
 plt.xlabel("Epoch")
-plt.ylabel("Loss")
-plt.title("Loss Curves (Log Scale, Non-Byzantine Nodes)")
-plt.yscale("log")  # 设置 y 轴为对数刻度
+plt.ylabel("Log Loss (log1p)")
+plt.title("Log Loss Curves (Non-Byzantine Nodes)")
 plt.legend()
 
-
-# 4. 可视化邻接矩阵
-plt.subplot(2, 2, 4)  # 2x2 网格，第 4 个子图
-plt.imshow(adj_matrix, cmap="Blues")
-plt.title("Adjacency Matrix")
-plt.colorbar()  # 添加颜色条
-
-plt.tight_layout()  # 自动调整子图间距
+plt.tight_layout()
 plt.show()
 plt.savefig("bridge.png")
