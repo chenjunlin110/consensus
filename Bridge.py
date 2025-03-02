@@ -238,16 +238,17 @@ plt.ylabel("Average Loss")
 plt.title("Loss Curves (Non-Byzantine Nodes)")
 plt.legend()
 
-# 3. 绘制每个节点的对数损失曲线
+# 3. 绘制每个节点的损失曲线，纵轴采用对数刻度
 plt.subplot(2, 2, 3)  # 2x2 网格，第 3 个子图
 for node_idx in range(num_nodes):
     if node_idx not in byzantine_indices:
-        log_loss = np.log(all_epoch_losses[node_idx])  # 使用 log1p 避免 log(0)
-        plt.plot(log_loss, label=f"Node {node_idx}")
+        plt.plot(all_epoch_losses[node_idx], label=f"Node {node_idx}")
 plt.xlabel("Epoch")
-plt.ylabel("Log Loss (log1p)")
-plt.title("Log Loss Curves (Non-Byzantine Nodes)")
+plt.ylabel("Loss")
+plt.title("Loss Curves (Log Scale, Non-Byzantine Nodes)")
+plt.yscale("log")  # 设置 y 轴为对数刻度
 plt.legend()
+
 
 # 4. 可视化邻接矩阵
 plt.subplot(2, 2, 4)  # 2x2 网格，第 4 个子图
