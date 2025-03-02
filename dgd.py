@@ -19,6 +19,7 @@ epochs = 100
 learning_rate = 0.01  # Basic learning rate for gradient descent
 batch_size = 64
 connectivity = 0.5
+byzantine_agents = random.sample(range(num_agents), int(num_agents * 0.2))  # 选取 20% 代理作为拜占庭节点
 
 # Load MNIST dataset
 transform = transforms.Compose([
@@ -117,6 +118,8 @@ def evaluate_model(model, data_loader, device):
 def run_decentralized_learning(epochs, num_agents, dataloaders, val_loader, device, lr=0.01):
     """Run decentralized learning with basic gradient descent"""
     # Initialize models
+    
+
     models = [CNN().to(device) for _ in range(num_agents)]
     for model in models:
         model.initialize_weights()
@@ -197,7 +200,8 @@ def run_decentralized_learning(epochs, num_agents, dataloaders, val_loader, devi
                     aggregated_param = torch.zeros_like(param.data)
                     
                     for j in range(num_agents):
-                       aggregated_param += W[i, j] * param_dict[j][name]
+                       if W[i, j] > 0:
+                        aggregated_param += W[i, j] * param_dict[j][name]
 
                     param.data.copy_(aggregated_param)
         
