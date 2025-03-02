@@ -7,16 +7,18 @@ import random
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
+import math
+
 # --- 超参数 ---
 num_nodes = 10
 max_byzantine_nodes = 2
 learning_rate = 0.01
 batch_size = 64
-num_epochs = 50
+num_epochs = 500
 trim_parameter = 2
-connectivity = 1
+connectivity = 0.7
 
-# --- 设备选择 (优先使用 MPS) ---
+# --- 设备选择 (优先使用 cuda) ---
 if torch.cuda.is_available():
     device = torch.device("cuda")
 else:
@@ -25,7 +27,7 @@ print(f"Using device: {device}")
 
 # --- 递减学习率序列 ---
 def lr_schedule(epoch):
-    return learning_rate / (1 + 0.1 * epoch)
+    return learning_rate / (1 + 0.1 * math.log(epoch+1))
 
 # --- 数据加载 ---
 transform = transforms.Compose([
@@ -114,8 +116,8 @@ all_epoch_losses = [[] for _ in range(num_nodes)]
 
 # --- 训练循环 ---
 for epoch in range(num_epochs):
-    # current_lr = lr_schedule(epoch)
-    current_lr = 0.01
+    current_lr = lr_schedule(epoch)
+    # current_lr = 0.01
     epoch_losses = [[] for _ in range(num_nodes)]
 
     for batch_idx in range(len(trainloaders[0])):
@@ -124,11 +126,9 @@ for epoch in range(num_epochs):
         local_gradients = []
         for node_idx in range(num_nodes):
             model = models[node_idx]
-            # optimizer = optimizers[node_idx]  # 不再需要
             data, target = next(iter(trainloaders[node_idx]))
             data, target = data.to(device), target.to(device)
 
-            # optimizer.zero_grad()  # 不再需要
             model.zero_grad()  # 使用模型的 zero_grad()
             output = model(data)
             loss = criterion(output, target)
@@ -152,6 +152,7 @@ for epoch in range(num_epochs):
         filtered_params = []
         for node_idx in range(num_nodes):
             neighbor_indices = np.where(adj_matrix[node_idx])[0]
+            # print(neighbor_indices)
             neighbor_params = [all_params[i] for i in neighbor_indices]
             aggregated_params = trimmed_mean_screen(neighbor_params, trim_parameter)
             filtered_params.append(aggregated_params)
@@ -241,7 +242,7 @@ plt.legend()
 plt.subplot(2, 2, 3)  # 2x2 网格，第 3 个子图
 for node_idx in range(num_nodes):
     if node_idx not in byzantine_indices:
-        log_loss = np.log1p(all_epoch_losses[node_idx])  # 使用 log1p 避免 log(0)
+        log_loss = np.log(all_epoch_losses[node_idx])  # 使用 log1p 避免 log(0)
         plt.plot(log_loss, label=f"Node {node_idx}")
 plt.xlabel("Epoch")
 plt.ylabel("Log Loss (log1p)")
@@ -256,3 +257,4 @@ plt.colorbar()  # 添加颜色条
 
 plt.tight_layout()  # 自动调整子图间距
 plt.show()
+plt.savefig("bridge.png")
