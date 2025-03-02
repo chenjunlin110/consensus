@@ -11,7 +11,7 @@ import math
 
 # --- 超参数 ---
 num_nodes = 10
-max_byzantine_nodes = 2
+max_byzantine_nodes = 5
 learning_rate = 0.01
 batch_size = 64
 num_epochs = 500
