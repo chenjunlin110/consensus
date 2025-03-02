@@ -6,7 +6,7 @@ import torchvision.transforms as transforms
 import random
 import numpy as np
 import networkx as nx
-import matplotlib as plt
+import matplotlib.pyplot as plt
 # --- 超参数 ---
 num_nodes = 10
 max_byzantine_nodes = 2
@@ -114,7 +114,8 @@ all_epoch_losses = [[] for _ in range(num_nodes)]
 
 # --- 训练循环 ---
 for epoch in range(num_epochs):
-    current_lr = lr_schedule(epoch)
+    # current_lr = lr_schedule(epoch)
+    current_lr = 0.01
     epoch_losses = [[] for _ in range(num_nodes)]
 
     for batch_idx in range(len(trainloaders[0])):
