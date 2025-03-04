@@ -15,7 +15,7 @@ num_nodes = 10
 max_byzantine_nodes = 2
 learning_rate = 0.01
 batch_size = 64
-num_epochs = 10
+num_epochs = 5
 trim_parameter = 2  # For BRIDGE-T and BRIDGE-B
 connectivity = 0.8
 seed = 42  # For reproducibility
@@ -400,65 +400,73 @@ def plot_results(all_epoch_losses, all_epoch_accuracies, adj_matrix, graph, byza
     result_dir = f"results_{timestamp}"
     os.makedirs(result_dir, exist_ok=True)
 
+    # Create figure for accuracy and loss plots
     plt.figure(figsize=(18, 12))
 
-    # 遍历四种方法，分别绘制准确率曲线
+    # Plot accuracy curves for each variant
     for i, variant in enumerate(variants):
-        plt.subplot(2, 4, i + 1)  # 2x4 布局
+        plt.subplot(2, len(variants), i + 1)  # Adjust layout based on number of variants
+        
+        # Plot accuracy for each non-byzantine node
         for node_idx in range(num_nodes):
             if node_idx not in byzantine_indices:
-                epochs_recorded = len(all_epoch_accuracies[variant][node_idx])
-                plt.plot(range(10, epochs_recorded * 10 + 1, 10),
-                         all_epoch_accuracies[variant][node_idx],
-                         label=f"Node {node_idx}")
+                node_accuracies = all_epoch_accuracies[variant][node_idx]
+                if node_accuracies:  # Check if there are accuracies recorded
+                    epochs = list(range(1, len(node_accuracies) + 1))
+                    plt.plot(epochs, node_accuracies, label=f"Node {node_idx}")
 
-        plt.xlabel("Epoch")
+        plt.xlabel("Evaluation Point")
         plt.ylabel("Accuracy (%)")
         plt.title(f"Accuracy ({variant})")
         plt.legend()
         plt.grid(True)
 
-    # 遍历四种方法，分别绘制损失曲线
+    # Plot loss curves for each variant
     for i, variant in enumerate(variants):
-        plt.subplot(2, 4, i + 5)  # 2x4 布局，下半部分
+        plt.subplot(2, len(variants), i + len(variants) + 1)  # Position in bottom row
+        
+        # Plot loss for each non-byzantine node
         for node_idx in range(num_nodes):
             if node_idx not in byzantine_indices:
-                plt.plot(all_epoch_losses[variant][node_idx], label=f"Node {node_idx}")
+                node_losses = all_epoch_losses[variant][node_idx]
+                if node_losses:  # Check if there are losses recorded
+                    epochs = list(range(1, len(node_losses) + 1))
+                    plt.plot(epochs, node_losses, label=f"Node {node_idx}")
 
         plt.xlabel("Epoch")
-        plt.ylabel("Log Loss")
+        plt.ylabel("Loss")
         plt.title(f"Loss ({variant})")
-        plt.yscale("log")
+        plt.yscale("log")  # Use logarithmic scale for loss
         plt.legend()
         plt.grid(True)
 
-    # 画出网络拓扑
-    plt.figure(figsize=(6, 6))
+    plt.tight_layout()
+    plt.savefig(f"{result_dir}/accuracy_loss_comparison.png", dpi=300)
+
+    # Create a separate figure for network topology
+    plt.figure(figsize=(8, 8))
     pos = nx.spring_layout(graph, seed=seed)
 
-    # 绘制正常节点
+    # Draw normal nodes
     non_byz_nodes = [i for i in range(num_nodes) if i not in byzantine_indices]
     nx.draw_networkx_nodes(graph, pos, nodelist=non_byz_nodes, node_color='blue', node_size=300, alpha=0.8)
 
-    # 绘制拜占庭节点
+    # Draw Byzantine nodes
     nx.draw_networkx_nodes(graph, pos, nodelist=byzantine_indices, node_color='red', node_size=300, alpha=0.8)
 
-    # 绘制网络连接
+    # Draw network connections
     nx.draw_networkx_edges(graph, pos, width=1.0, alpha=0.5)
     nx.draw_networkx_labels(graph, pos, font_size=10, font_family='sans-serif')
 
     plt.title("Network Topology (Red: Byzantine, Blue: Honest)")
     plt.axis('off')
     plt.savefig(f"{result_dir}/network_topology.png", dpi=300)
-    plt.show()
 
-    plt.tight_layout()
-    plt.savefig(f"{result_dir}/accuracy_loss_comparison.png", dpi=300)
+    # Show all figures
     plt.show()
 
     print(f"Results saved to {result_dir}")
-
-
+    
 # --- Main function ---
 def main():
     print("Starting Byzantine-resilient federated learning experiment...")
