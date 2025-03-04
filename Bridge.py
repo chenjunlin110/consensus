@@ -15,7 +15,7 @@ num_nodes = 10
 max_byzantine_nodes = 2
 learning_rate = 0.01
 batch_size = 64
-num_epochs = 5
+num_epochs = 20
 trim_parameter = 2  # For BRIDGE-T and BRIDGE-B
 connectivity = 0.8
 seed = 42  # For reproducibility
@@ -466,7 +466,7 @@ def plot_results(all_epoch_losses, all_epoch_accuracies, adj_matrix, graph, byza
     plt.show()
 
     print(f"Results saved to {result_dir}")
-    
+
 # --- Main function ---
 def main():
     print("Starting Byzantine-resilient federated learning experiment...")
