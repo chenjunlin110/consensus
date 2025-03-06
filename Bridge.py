@@ -11,14 +11,14 @@ import os
 from datetime import datetime
 
 # --- Hyperparameters ---
-num_nodes = 10
+num_nodes = 50
 max_byzantine_nodes = 2
 learning_rate = 0.01
 batch_size = 64
-num_epochs = 20
+num_epochs = 10
 trim_parameter = 2  # For BRIDGE-T and BRIDGE-B
 connectivity = 0.8
-seed = 42  # For reproducibility
+seed = 24  # For reproducibility
 
 # --- Set random seeds for reproducibility ---
 random.seed(seed)
@@ -115,7 +115,7 @@ def create_adjacency_matrix(num_nodes, connectivity, seed):
 
     adj_matrix = nx.to_numpy_array(graph)
     np.fill_diagonal(adj_matrix, 1)  # Include self-loops
-    return adj_matrix, graph
+    return adj_matrix, graph  # Return the graph as well
 
 
 def select_byzantine_nodes(num_nodes, max_byzantine):
@@ -124,11 +124,16 @@ def select_byzantine_nodes(num_nodes, max_byzantine):
     return byzantine_indices
 
 
-# --- Screening functions ---
 def trimmed_mean_screen(params_list, trim_param):
     """BRIDGE-T: Coordinate-wise trimmed mean"""
     num_params = len(params_list[0])
     aggregated_params = []
+
+    # Check if we have enough parameters for proper trimming
+    if len(params_list) <= 2 * trim_param:
+        print(f"WARNING: Not enough nodes for proper trimming. Need more than {2 * trim_param} nodes, but only have {len(params_list)}.")
+        print("Cannot proceed with trimmed mean aggregation.")
+        raise ValueError("Insufficient nodes for trimmed mean operation")
 
     for param_idx in range(num_params):
         # Get original shape for reshaping later
@@ -144,11 +149,7 @@ def trimmed_mean_screen(params_list, trim_param):
         sorted_values, _ = torch.sort(param_values, dim=0)
 
         # Get trimmed values
-        if len(params_list) > 2 * trim_param:  # Ensure we have enough values after trimming
-            trimmed_values = sorted_values[trim_param:len(params_list) - trim_param]
-        else:
-            # If not enough values, use middle value
-            trimmed_values = sorted_values[len(params_list) // 2].unsqueeze(0)
+        trimmed_values = sorted_values[trim_param:len(params_list) - trim_param]
 
         # Calculate mean
         aggregated_param = torch.mean(trimmed_values, dim=0)
@@ -157,6 +158,7 @@ def trimmed_mean_screen(params_list, trim_param):
         aggregated_params.append(aggregated_param.reshape(original_shape))
 
     return aggregated_params
+
 
 
 def median_screen(params_list):
@@ -189,8 +191,9 @@ def krum_screen(params_list, num_byzantine):
 
     # If the condition for Krum is not met, return the first parameter set
     if num_to_select <= 0:
-        return params_list[0]
-
+        print(f"WARNING: Not enough nodes for proper trimming. Need more than {num_byzantine + 2} nodes, but only have {num_neighbors}.")
+        print("Cannot proceed with Krum aggregation.")
+        raise ValueError("Insufficient nodes for Krum mean operation")
     # Calculate pairwise Euclidean distances between parameter sets
     distances = torch.zeros((num_neighbors, num_neighbors), device=device)
     for i in range(num_neighbors):
@@ -220,9 +223,11 @@ def krum_screen(params_list, num_byzantine):
 
 def krum_trimmed_mean_screen(params_list, trim_param, num_byzantine):
     """BRIDGE-B: Krum followed by Trimmed Mean"""
-    if len(params_list) <= trim_param * 2 + 1:
-        # Not enough parameters for proper trimming, use Krum only
-        return krum_screen(params_list, num_byzantine)
+    num_neighbors = len(params_list)
+    if num_neighbors <= 3*num_byzantine + 2 and num_neighbors <= 4*num_byzantine:
+        print(f"WARNING: Not enough nodes for proper trimming. Need more than max({3*num_byzantine + 2}, {4*num_byzantine}) nodes, but only have {num_neighbors}.")
+        print("Cannot proceed with Krum aggregation.")
+        raise ValueError("Insufficient nodes for Krum trimmed operation")
 
     # First, select a parameter set using Krum
     krum_selected_params = krum_screen(params_list, num_byzantine)
@@ -266,7 +271,7 @@ def get_byzantine_params(original_params, attack_type, device):
 
 # --- Training and evaluation functions ---
 def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, current_lr, variants,
-                attack_type="random"):
+                attack_type="sign_flipping"):
     epoch_losses = {variant: [[] for _ in range(num_nodes)] for variant in variants}
 
     # Determine maximum number of batches
@@ -395,11 +400,7 @@ def evaluate_models(models, testloader, byzantine_indices, variants):
 
 
 # --- Visualization functions ---
-def plot_results(all_epoch_losses, all_epoch_accuracies, adj_matrix, graph, byzantine_indices, variants):
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    result_dir = f"results_{timestamp}"
-    os.makedirs(result_dir, exist_ok=True)
-
+def plot_results(all_epoch_losses, all_epoch_accuracies, byzantine_indices, variants, result_dir):
     # Create figure for accuracy and loss plots
     plt.figure(figsize=(18, 12))
 
@@ -442,7 +443,14 @@ def plot_results(all_epoch_losses, all_epoch_accuracies, adj_matrix, graph, byza
 
     plt.tight_layout()
     plt.savefig(f"{result_dir}/accuracy_loss_comparison.png", dpi=300)
+    
+    # Plot the network topology
+    # plot_adjacency_matrix(adj_matrix, graph, byzantine_indices, result_dir)
+    
+    print(f"Results saved to {result_dir}")
 
+
+def plot_adjacency_matrix(adj_matrix, graph, byzantine_indices, result_dir):
     # Create a separate figure for network topology
     plt.figure(figsize=(8, 8))
     pos = nx.spring_layout(graph, seed=seed)
@@ -462,14 +470,13 @@ def plot_results(all_epoch_losses, all_epoch_accuracies, adj_matrix, graph, byza
     plt.axis('off')
     plt.savefig(f"{result_dir}/network_topology.png", dpi=300)
 
-    # Show all figures
-    plt.show()
-
-    print(f"Results saved to {result_dir}")
 
 # --- Main function ---
 def main():
     print("Starting Byzantine-resilient federated learning experiment...")
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    result_dir = f"results_{timestamp}"
+    os.makedirs(result_dir, exist_ok=True)
 
     # Set up variants
     variants = ["BRIDGE-T", "BRIDGE-M", "BRIDGE-K", "BRIDGE-B"]
@@ -479,12 +486,13 @@ def main():
     print("Data loaded successfully")
 
     # Create network topology
-    adj_matrix, graph = create_adjacency_matrix(num_nodes, connectivity, seed)
+    adj_matrix, graph = create_adjacency_matrix(num_nodes, connectivity, seed)  # Get graph as well
     print("Network topology created")
     print(f"Adjacency Matrix:\n{adj_matrix}")
 
     # Select Byzantine nodes
     byzantine_indices = select_byzantine_nodes(num_nodes, max_byzantine_nodes)
+    plot_adjacency_matrix(adj_matrix, graph, byzantine_indices, result_dir)
 
     # Initialize models for each variant and node
     models = {variant: [SimpleCNN().to(device) for _ in range(num_nodes)] for variant in variants}
@@ -519,21 +527,21 @@ def main():
 
             # Record accuracies
             for variant in variants:
-                for node_idx in range(num_nodes):
-                    if node_idx not in byzantine_indices:
-                        all_epoch_accuracies[variant][node_idx].append(
-                            accuracies[variant][node_idx - len(byzantine_indices)])
+                for node_idx, acc in enumerate(accuracies[variant]):
+                    # Only record for non-Byzantine nodes and match the index
+                    if node_idx < len(accuracies[variant]):
+                        all_epoch_accuracies[variant][node_idx].append(acc)
 
             # Print current progress
             for variant in variants:
-                honest_accuracies = [acc for i, acc in enumerate(accuracies[variant])]
+                honest_accuracies = accuracies[variant]
                 mean_acc = np.mean(honest_accuracies)
                 print(f"  {variant}: Mean accuracy = {mean_acc:.2f}%")
 
     print("Training completed")
 
     # Plot and save results
-    plot_results(all_epoch_losses, all_epoch_accuracies, adj_matrix, graph, byzantine_indices, variants)
+    plot_results(all_epoch_losses, all_epoch_accuracies, byzantine_indices, variants, result_dir=result_dir)
 
 
 if __name__ == "__main__":
